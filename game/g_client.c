@@ -67,265 +67,12 @@ void SP_info_player_intermission( gentity_t *ent ) {
 
 }
 
-#define JMSABER_RESPAWN_TIME 20000 //in case it gets stuck somewhere no one can reach
-
-void ThrowSaberToAttacker(gentity_t *self, gentity_t *attacker)
-{
-	gentity_t *ent = &g_entities[self->client->ps.saberIndex];
-	vec3_t a;
-	int altVelocity = 0;
-
-	if (!ent || ent->enemy != self)
-	{ //something has gone very wrong (this should never happen)
-		//but in case it does.. find the saber manually
-#ifdef _DEBUG
-		Com_Printf("Lost the saber! Attempting to use global pointer..\n");
-#endif
-		ent = gJMSaberEnt;
-
-		if (!ent)
-		{
-#ifdef _DEBUG
-			Com_Printf("The global pointer was NULL. This is a bad thing.\n");
-#endif
-			return;
-		}
-
-#ifdef _DEBUG
-		Com_Printf("Got it (%i). Setting enemy to client %i.\n", ent->s.number, self->s.number);
-#endif
-
-		ent->enemy = self;
-		self->client->ps.saberIndex = ent->s.number;
-	}
-
-	trap_SetConfigstring ( CS_CLIENT_JEDIMASTER, "-1" );
-
-	if (attacker && attacker->client && self->client->ps.saberInFlight)
-	{ //someone killed us and we had the saber thrown, so actually move this saber to the saber location
-	  //if we killed ourselves with saber thrown, however, same suicide rules of respawning at spawn spot still
-	  //apply.
-		gentity_t *flyingsaber = &g_entities[self->client->ps.saberEntityNum];
-
-		if (flyingsaber && flyingsaber->inuse)
-		{
-			VectorCopy(flyingsaber->s.pos.trBase, ent->s.pos.trBase);
-			VectorCopy(flyingsaber->s.pos.trDelta, ent->s.pos.trDelta);
-			VectorCopy(flyingsaber->s.apos.trBase, ent->s.apos.trBase);
-			VectorCopy(flyingsaber->s.apos.trDelta, ent->s.apos.trDelta);
-
-			VectorCopy(flyingsaber->r.currentOrigin, ent->r.currentOrigin);
-			VectorCopy(flyingsaber->r.currentAngles, ent->r.currentAngles);
-			altVelocity = 1;
-		}
-	}
-
-	self->client->ps.saberInFlight = qtrue; //say he threw it anyway in order to properly remove from dead body
-
-	ent->s.modelindex = G_ModelIndex("models/weapons2/saber/saber_w.glm");
-	ent->s.eFlags &= ~(EF_NODRAW);
-	ent->s.modelGhoul2 = 1;
-	ent->s.eType = ET_MISSILE;
-	ent->enemy = NULL;
-
-	if (!attacker || !attacker->client)
-	{
-		VectorCopy(ent->s.origin2, ent->s.pos.trBase);
-		VectorCopy(ent->s.origin2, ent->s.origin);
-		VectorCopy(ent->s.origin2, ent->r.currentOrigin);
-		ent->pos2[0] = 0;
-		trap_LinkEntity(ent);
-		return;
-	}
-
-	if (!altVelocity)
-	{
-		VectorCopy(self->s.pos.trBase, ent->s.pos.trBase);
-		VectorCopy(self->s.pos.trBase, ent->s.origin);
-		VectorCopy(self->s.pos.trBase, ent->r.currentOrigin);
-
-		VectorSubtract(attacker->client->ps.origin, ent->s.pos.trBase, a);
-
-		VectorNormalize(a);
-
-		ent->s.pos.trDelta[0] = a[0]*256;
-		ent->s.pos.trDelta[1] = a[1]*256;
-		ent->s.pos.trDelta[2] = 256;
-	}
-
-	trap_LinkEntity(ent);
-}
-
-void JMSaberThink(gentity_t *ent)
-{
-	gJMSaberEnt = ent;
-
-	if (ent->enemy)
-	{
-		if (!ent->enemy->client || !ent->enemy->inuse)
-		{ //disconnected?
-			VectorCopy(ent->enemy->s.pos.trBase, ent->s.pos.trBase);
-			VectorCopy(ent->enemy->s.pos.trBase, ent->s.origin);
-			VectorCopy(ent->enemy->s.pos.trBase, ent->r.currentOrigin);
-			ent->s.modelindex = G_ModelIndex("models/weapons2/saber/saber_w.glm");
-			ent->s.eFlags &= ~(EF_NODRAW);
-			ent->s.modelGhoul2 = 1;
-			ent->s.eType = ET_MISSILE;
-			ent->enemy = NULL;
-
-			ent->pos2[0] = 1;
-			ent->pos2[1] = 0; //respawn next think
-			trap_LinkEntity(ent);
-		}
-		else
-		{
-			ent->pos2[1] = level.time + JMSABER_RESPAWN_TIME;
-		}
-	}
-	else if (ent->pos2[0] && ent->pos2[1] < level.time)
-	{
-		VectorCopy(ent->s.origin2, ent->s.pos.trBase);
-		VectorCopy(ent->s.origin2, ent->s.origin);
-		VectorCopy(ent->s.origin2, ent->r.currentOrigin);
-		ent->pos2[0] = 0;
-		trap_LinkEntity(ent);
-	}
-
-	ent->nextthink = level.time + 50;
-	G_RunObject(ent);
-}
-
-void JMSaberTouch(gentity_t *self, gentity_t *other, trace_t *trace)
-{
-	int i = 0;
-//	gentity_t *te;
-
-	if (!other || !other->client || other->health < 1)
-	{
-		return;
-	}
-
-	if (self->enemy)
-	{
-		return;
-	}
-
-	if (!self->s.modelindex)
-	{
-		return;
-	}
-
-	if (other->client->ps.stats[STAT_WEAPONS] & (1 << WP_SABER))
-	{
-		return;
-	}
-
-	if (other->client->ps.isJediMaster)
-	{
-		return;
-	}
-
-	self->enemy = other;
-	other->client->ps.stats[STAT_WEAPONS] = (1 << WP_SABER);
-	other->client->ps.weapon = WP_SABER;
-	other->s.weapon = WP_SABER;
-	G_AddEvent(other, EV_BECOME_JEDIMASTER, 0);
-
-	// Track the jedi master 
-	trap_SetConfigstring ( CS_CLIENT_JEDIMASTER, va("%i", other->s.number ) );
-
-	if (g_spawnInvulnerability.integer)
-	{
-		other->client->ps.eFlags |= EF_INVULNERABLE;
-		other->client->invulnerableTimer = level.time + g_spawnInvulnerability.integer;
-	}
-
-	trap_SendServerCommand( -1, va("cp \"%s %s\n\"", other->client->pers.netname, G_GetStripEdString("SVINGAME", "BECOMEJM")) );
-
-	other->client->ps.isJediMaster = qtrue;
-	other->client->ps.saberIndex = self->s.number;
-
-	if (other->health < 200 && other->health > 0)
-	{ //full health when you become the Jedi Master
-		other->client->ps.stats[STAT_HEALTH] = other->health = 200;
-	}
-
-	if (other->client->ps.fd.forcePower < 100)
-	{
-		other->client->ps.fd.forcePower = 100;
-	}
-
-	while (i < NUM_FORCE_POWERS)
-	{
-		other->client->ps.fd.forcePowersKnown |= (1 << i);
-		other->client->ps.fd.forcePowerLevel[i] = FORCE_LEVEL_3;
-
-		i++;
-	}
-
-	self->pos2[0] = 1;
-	self->pos2[1] = level.time + JMSABER_RESPAWN_TIME;
-
-	self->s.modelindex = 0;
-	self->s.eFlags |= EF_NODRAW;
-	self->s.modelGhoul2 = 0;
-	self->s.eType = ET_GENERAL;
-
-	/*
-	te = G_TempEntity( vec3_origin, EV_DESTROY_GHOUL2_INSTANCE );
-	te->r.svFlags |= SVF_BROADCAST;
-	te->s.eventParm = self->s.number;
-	*/
-	G_KillG2Queue(self->s.number);
-
-	return;
-}
-
-gentity_t *gJMSaberEnt = NULL;
-
 /*QUAKED info_jedimaster_start (1 0 0) (-16 -16 -24) (16 16 32)
 "jedi master" saber spawn point
 */
-void SP_info_jedimaster_start(gentity_t *ent)
-{
-	if (g_gametype.integer != GT_JEDIMASTER)
-	{
-		gJMSaberEnt = NULL;
-		G_FreeEntity(ent);
-		return;
-	}
-
-	ent->enemy = NULL;
-
-	ent->s.eFlags = EF_BOUNCE_HALF;
-
-	ent->s.modelindex = G_ModelIndex("models/weapons2/saber/saber_w.glm");
-	ent->s.modelGhoul2 = 1;
-	ent->s.g2radius = 20;
-	//ent->s.eType = ET_GENERAL;
-	ent->s.eType = ET_MISSILE;
-	ent->s.weapon = WP_SABER;
-	ent->s.pos.trType = TR_GRAVITY;
-	ent->s.pos.trTime = level.time;
-	VectorSet( ent->r.maxs, 3, 3, 3 );
-	VectorSet( ent->r.mins, -3, -3, -3 );
-	ent->r.contents = CONTENTS_TRIGGER;
-	ent->clipmask = MASK_SOLID;
-
-	ent->isSaberEntity = qtrue;
-
-	ent->bounceCount = -5;
-
-	ent->physicsObject = qtrue;
-
-	VectorCopy(ent->s.pos.trBase, ent->s.origin2); //remember the spawn spot
-
-	ent->touch = JMSaberTouch;
-
-	trap_LinkEntity(ent);
-
-	ent->think = JMSaberThink;
-	ent->nextthink = level.time + 50;
+void SP_info_jedimaster_start(gentity_t *ent) {
+	G_FreeEntity(ent);
+	return;
 }
 
 /*
@@ -826,7 +573,6 @@ int TeamLeader( int team ) {
 	return -1;
 }
 
-
 /*
 ================
 PickTeam
@@ -834,22 +580,32 @@ PickTeam
 ================
 */
 team_t PickTeam( int ignoreClientNum ) {
-	int		counts[TEAM_NUM_TEAMS];
+	int			counts[TEAM_NUM_TEAMS];
+	qboolean	locked[TEAM_NUM_TEAMS];
 
 	counts[TEAM_BLUE] = TeamCount( ignoreClientNum, TEAM_BLUE );
 	counts[TEAM_RED] = TeamCount( ignoreClientNum, TEAM_RED );
+	// team can be locked by team lock and teamsize
+	locked[TEAM_RED] = level.teamLock[TEAM_RED];
+	locked[TEAM_BLUE] = level.teamLock[TEAM_BLUE];
 
-	if ( counts[TEAM_BLUE] > counts[TEAM_RED] ) {
-		return TEAM_RED;
-	}
-	if ( counts[TEAM_RED] > counts[TEAM_BLUE] ) {
+	// pick team
+	if ( !locked[TEAM_BLUE] && !locked[TEAM_RED] ) {
+		if ( counts[TEAM_RED] > counts[TEAM_BLUE] )
+			return TEAM_BLUE;
+		if ( counts[TEAM_BLUE] > counts[TEAM_RED] )
+			return TEAM_RED;
+		if ( level.teamScores[TEAM_BLUE] > level.teamScores[TEAM_RED] )
+			return TEAM_RED;
 		return TEAM_BLUE;
 	}
-	// equal team count, so join the team with the lowest score
-	if ( level.teamScores[TEAM_BLUE] > level.teamScores[TEAM_RED] ) {
+	// at least one is locked
+	if ( !locked[TEAM_BLUE] )
+		return TEAM_BLUE;
+	if ( !locked[TEAM_RED] )
 		return TEAM_RED;
-	}
-	return TEAM_BLUE;
+
+	return TEAM_SPECTATOR;
 }
 
 /*
@@ -1576,13 +1332,6 @@ void ClientSpawn(gentity_t *ent) {
 						client->pers.teamState.state, 
 						spawn_origin, spawn_angles);
 	}
-	else if (g_gametype.integer == GT_SAGA)
-	{
-		spawnPoint = SelectSagaSpawnPoint ( 
-						client->sess.sessionTeam, 
-						client->pers.teamState.state, 
-						spawn_origin, spawn_angles);
-	}
 	else {
 		do {
 			// the first spawn should be at a good looking spot
@@ -1802,7 +1551,14 @@ void ClientSpawn(gentity_t *ent) {
 	ent->health = client->ps.stats[STAT_HEALTH] = client->ps.stats[STAT_MAX_HEALTH] * 1.25;
 
 	// Start with a small amount of armor as well.
-	client->ps.stats[STAT_ARMOR] = client->ps.stats[STAT_MAX_HEALTH] * 0.25;
+	client->ps.stats[STAT_ARMOR] = g_duelshield.integer; //client->ps.stats[STAT_MAX_HEALTH] * 0.25;
+
+	if ( client->pers.spawn[0] || client->pers.spawn[1] || client->pers.spawn[2] ) {
+		spawn_origin[0] = client->pers.spawn[0];
+		spawn_origin[1] = client->pers.spawn[1];
+		spawn_origin[2] = client->pers.spawn[2];
+		spawn_angles[1] = client->pers.spawn[3];
+	}
 
 	G_SetOrigin( ent, spawn_origin );
 	VectorCopy( spawn_origin, client->ps.origin );
@@ -1973,7 +1729,7 @@ void ClientDisconnect( int clientNum ) {
 	CalculateRanks();
 
 	if ( ent->r.svFlags & SVF_BOT ) {
-		BotAIShutdownClient( clientNum, qfalse );
+		BotAIShutdownClient( clientNum, 0 );
 	}
 
 	G_ClearClientLog(clientNum);

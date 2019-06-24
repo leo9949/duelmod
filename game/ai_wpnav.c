@@ -3,9 +3,9 @@
 #include "botlib.h"
 #include "ai_main.h"
 
-float gWPRenderTime = 0;
-float gDeactivated = 0;
-float gBotEdit = 0;
+int gWPRenderTime = 0;
+qboolean gDeactivated = qfalse;
+qboolean gBotEdit = qfalse;
 int gWPRenderedFrame = 0;
 wpobject_t *gWPArray[MAX_WPARRAY_SIZE];
 int gWPNum = 0;
@@ -213,6 +213,20 @@ void G_TestLine(vec3_t start, vec3_t end, int color, int time)
 	te->s.time2 = time;
 	te->s.weapon = color;
 	te->r.svFlags |= SVF_BROADCAST;
+}
+
+void defragTrail(vec3_t start, vec3_t end, /*int dimension, */int time)
+{
+	gentity_t *te;
+
+	te = G_TempEntity( start, EV_TESTLINE );
+//	te->r.dimension = dimension;
+
+	VectorCopy(start, te->s.origin);
+	VectorCopy(end, te->s.origin2);
+	te->freeAfterEvent = qtrue;
+	te->s.time2 = time;//500;//Q3_TIMEINFINITE;
+	te->s.weapon = 0x000000FF;
 }
 
 void BotWaypointRender(void)
@@ -1363,68 +1377,6 @@ gentity_t *GetObjectThatTargets(gentity_t *ent)
 	return NULL;
 }
 
-void CalculateSagaGoals(void)
-{
-	int i = 0;
-	int looptracker = 0;
-	int wpindex = 0;
-	vec3_t dif;
-	gentity_t *ent;
-	gentity_t *tent = NULL, *t2ent = NULL;
-
-	while (i < MAX_GENTITIES)
-	{
-		ent = &g_entities[i];
-
-		tent = NULL;
-
-		if (ent && ent->classname && strcmp(ent->classname, "info_saga_objective") == 0)
-		{
-			tent = ent;
-			t2ent = GetObjectThatTargets(tent);
-			looptracker = 0;
-
-			while (t2ent && looptracker < 2048)
-			{ //looptracker keeps us from getting stuck in case something is set up weird on this map
-				tent = t2ent;
-				t2ent = GetObjectThatTargets(tent);
-				looptracker++;
-			}
-
-			if (looptracker >= 2048)
-			{ //something unpleasent has happened
-				tent = NULL;
-				break;
-			}
-		}
-
-		if (tent && ent && tent != ent)
-		{ //tent should now be the object attached to the mission objective
-			dif[0] = (tent->r.absmax[0]+tent->r.absmin[0])/2;
-			dif[1] = (tent->r.absmax[1]+tent->r.absmin[1])/2;
-			dif[2] = (tent->r.absmax[2]+tent->r.absmin[2])/2;
-
-			wpindex = GetNearestVisibleWP(dif, tent->s.number);
-
-			if (wpindex != -1 && gWPArray[wpindex] && gWPArray[wpindex]->inuse)
-			{ //found the waypoint nearest the center of this objective-related object
-				if (ent->side == SAGATEAM_IMPERIAL)
-				{
-					gWPArray[wpindex]->flags |= WPFLAG_SAGA_IMPERIALOBJ;
-				}
-				else
-				{
-					gWPArray[wpindex]->flags |= WPFLAG_SAGA_REBELOBJ;
-				}
-
-				gWPArray[wpindex]->associated_entity = tent->s.number;
-			}
-		}
-
-		i++;
-	}
-}
-
 float botGlobalNavWeaponWeights[WP_NUM_WEAPONS] =
 {
 	0,//WP_NONE,
@@ -1864,11 +1816,6 @@ int LoadPathData(const char *filename)
 
 	trap_FS_FCloseFile(f);
 
-	if (g_gametype.integer == GT_SAGA)
-	{
-		CalculateSagaGoals();
-	}
-
 	CalculateWeightGoals();
 	//calculate weights for idle activity goals when
 	//the bot has absolutely nothing else to do
@@ -2146,11 +2093,11 @@ void LoadPath_ThisLevel(void)
 
 	if (bot_wp_edit.value)
 	{
-		gBotEdit = 1;
+		gBotEdit = qtrue;
 	}
 	else
 	{
-		gBotEdit = 0;
+		gBotEdit = qfalse;
 	}
 
 	//set the flag entities
@@ -2296,7 +2243,7 @@ int AcceptBotCommand(char *cmd, gentity_t *pl)
 
 	if (Q_stricmp (cmd, "bot_wp_add") == 0)
 	{
-		gDeactivated = 1;
+		gDeactivated = qtrue;
 		OptionalSArgument = ConcatArgs( 1 );
 
 		if (OptionalSArgument)
@@ -2317,7 +2264,7 @@ int AcceptBotCommand(char *cmd, gentity_t *pl)
 
 	if (Q_stricmp (cmd, "bot_wp_rem") == 0)
 	{
-		gDeactivated = 1;
+		gDeactivated = qtrue;
 
 		OptionalSArgument = ConcatArgs( 1 );
 
@@ -2340,7 +2287,7 @@ int AcceptBotCommand(char *cmd, gentity_t *pl)
 
 	if (Q_stricmp (cmd, "bot_wp_tele") == 0)
 	{
-		gDeactivated = 1;
+		gDeactivated = qtrue;
 		OptionalSArgument = ConcatArgs( 1 );
 
 		if (OptionalSArgument)
@@ -2380,7 +2327,7 @@ int AcceptBotCommand(char *cmd, gentity_t *pl)
 
 	if (Q_stricmp (cmd, "bot_wp_addflagged") == 0)
 	{
-		gDeactivated = 1;
+		gDeactivated = qtrue;
 
 		RequiredSArgument = ConcatArgs( 1 );
 
@@ -2456,7 +2403,7 @@ int AcceptBotCommand(char *cmd, gentity_t *pl)
 
 	if (Q_stricmp (cmd, "bot_wp_switchflags") == 0)
 	{
-		gDeactivated = 1;
+		gDeactivated = qtrue;
 
 		RequiredSArgument = ConcatArgs( 1 );
 
@@ -2556,7 +2503,7 @@ int AcceptBotCommand(char *cmd, gentity_t *pl)
 
 	if (Q_stricmp (cmd, "bot_wp_save") == 0)
 	{
-		gDeactivated = 0;
+		gDeactivated = qfalse;
 		trap_Cvar_Register( &mapname, "mapname", "", CVAR_SERVERINFO | CVAR_ROM );
 		SavePathData(mapname.string);
 		return 1;

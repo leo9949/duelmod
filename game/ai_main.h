@@ -148,7 +148,7 @@ typedef struct boteventtracker_s
 {
 	int			eventSequence;
 	int			events[MAX_PS_EVENTS];
-	float		eventTime;
+	int			eventTime;
 } boteventtracker_t;
 
 typedef struct botskills_s
@@ -225,28 +225,28 @@ typedef struct bot_state_s
 
 	int					wpDirection;
 
-	float				destinationGrabTime;
-	float				wpSeenTime;
-	float				wpTravelTime;
-	float				wpDestSwitchTime;
-	float				wpSwitchTime;
-	float				wpDestIgnoreTime;
+	int					destinationGrabTime;
+	int					wpSeenTime;
+	int					wpTravelTime;
+	int					wpDestSwitchTime;
+	int					wpSwitchTime;
+	int					wpDestIgnoreTime;
 
-	float				timeToReact;
+	int					timeToReact;
 
-	float				enemySeenTime;
+	int					enemySeenTime;
 
-	float				chickenWussCalculationTime;
+	int					chickenWussCalculationTime;
 
-	float				beStill;
-	float				duckTime;
-	float				jumpTime;
-	float				jumpHoldTime;
-	float				jumpPrep;
-	float				forceJumping;
-	float				jDelay;
+	int					beStill;
+	int					duckTime;
+	int					jumpTime;
+	int					jumpHoldTime;
+	int					jumpPrep;
+	int					forceJumping;
+	int					jDelay;
 
-	float				aimOffsetTime;
+	int					aimOffsetTime;
 	float				aimOffsetAmtYaw;
 	float				aimOffsetAmtPitch;
 
@@ -256,7 +256,7 @@ typedef struct bot_state_s
 	int					frame_Enemy_Vis;
 
 	int					isCamper;
-	float				isCamping;
+	int					isCamping;
 	wpobject_t			*wpCamping;
 	wpobject_t			*wpCampingTo;
 	qboolean			campStanding;
@@ -269,22 +269,22 @@ typedef struct bot_state_s
 	int					canChat;
 	int					chatFrequency;
 	char				currentChat[MAX_CHAT_LINE_SIZE];
-	float				chatTime;
-	float				chatTime_stored;
+	int					chatTime;
+	int					chatTime_stored;
 	int					doChat;
 	int					chatTeam;
 	gentity_t			*chatObject;
 	gentity_t			*chatAltObject;
 
-	float				meleeStrafeTime;
+	int					meleeStrafeTime;
 	int					meleeStrafeDir;
-	float				meleeStrafeDisable;
+	int					meleeStrafeDisable;
 
 	int					altChargeTime;
 
-	float				escapeDirTime;
+	int					escapeDirTime;
 
-	float				dontGoBack;
+	int					dontGoBack;
 
 	int					doAttack;
 	int					doAltAttack;
@@ -313,7 +313,7 @@ typedef struct bot_state_s
 
 	int					deathActivitiesDone;
 
-	float				botWeaponWeights[WP_NUM_WEAPONS];
+	int					botWeaponWeights[WP_NUM_WEAPONS];
 
 	int					ctfState;
 
@@ -350,10 +350,10 @@ typedef struct bot_state_s
 	//end rww
 } bot_state_t;
 
-void *B_TempAlloc(int size);
-void B_TempFree(int size);
+void *B_TempAlloc(size_t size);
+void B_TempFree(size_t size);
 
-void *B_Alloc(int size);
+void *B_Alloc(size_t size);
 void B_Free(void *ptr);
 
 //resets the whole bot state
@@ -397,9 +397,9 @@ extern gentity_t *eFlagRed;
 extern gentity_t *eFlagBlue;
 
 extern char gBotChatBuffer[MAX_CLIENTS][MAX_CHAT_BUFFER_SIZE];
-extern float gWPRenderTime;
-extern float gDeactivated;
-extern float gBotEdit;
+extern int gWPRenderTime;
+extern qboolean gDeactivated;
+extern qboolean gBotEdit;
 extern int gWPRenderedFrame;
 extern wpobject_t *gWPArray[MAX_WPARRAY_SIZE];
 extern int gWPNum;

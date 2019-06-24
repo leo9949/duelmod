@@ -387,6 +387,70 @@ void	Svcmd_ForceTeam_f( void ) {
 	SetTeam( &g_entities[cl - level.clients], str );
 }
 
+static team_t G_TeamFromLetter( const char letter )
+{
+	switch (letter) {
+	case 's':
+	case 'S':
+		return TEAM_SPECTATOR;
+	case 'f':
+	case 'F':
+		return TEAM_FREE;
+	case 'r':
+	case 'R':
+		return TEAM_RED;
+	case 'b':
+	case 'B':
+		return TEAM_BLUE;
+	default:
+		G_Printf( "Valid teams are: spectator free red blue\n" );
+		return TEAM_NUM_TEAMS;
+	}
+}
+
+/*
+===================
+Svcmd_LockTeam_f
+
+lockteam <team>
+===================
+*/
+void Svcmd_LockTeam_f( void )
+{
+	char		str[MAX_TOKEN_CHARS];
+	team_t		team;
+	int			argc = trap_Argc();
+
+	if ( argc < 2 ) {
+		G_Printf( va("Teams currently locked: %s %s %s %s\n",
+		level.teamLock[TEAM_RED]?"^1RED":"", level.teamLock[TEAM_BLUE]?"^4BLUE":"",
+		level.teamLock[TEAM_SPECTATOR]?"^7SPEC":"", level.teamLock[TEAM_FREE]?"^2FREE":"") );
+		return;
+	}
+
+	trap_Argv( 1, str, sizeof( str ) );
+	if ( str[0] == 'a' ) {
+		if (!level.teamLock[TEAM_BLUE] || !level.teamLock[TEAM_RED]) {
+			level.teamLock[TEAM_BLUE] = level.teamLock[TEAM_RED] = qtrue;
+			G_Printf("Red and blue teams have been ^1locked.\n");
+			trap_SendServerCommand( -1, "cp \"Red and blue teams have been ^1locked.\n\"" );
+		} else {
+			level.teamLock[TEAM_BLUE] = level.teamLock[TEAM_RED] = qfalse;
+			G_Printf("Red and blue teams have been ^2unlocked.\n");
+			trap_SendServerCommand( -1, "cp \"Red and blue teams have been ^2unlocked.\n\"" );
+		}
+	} else {
+		team = G_TeamFromLetter(str[0]);
+		if ((int)team<0||(int)team>3) {
+			G_Printf("Invalid team: %s\n", str);
+			return;
+		}
+		level.teamLock[team] = !level.teamLock[team];
+	//	G_Printf("%s team has been %slocked.", BG_TeamName(team, CASE_NORMAL), level.teamLock[team]?"^1":"^2un");
+	//	trap_SendServerCommand( -1, va("cp \"%s team has been %slocked.\n\"", BG_TeamName(team, CASE_NORMAL), level.teamLock[team]?"^1":"^2un") );
+	}
+}
+
 char	*ConcatArgs( int start );
 
 /*

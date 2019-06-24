@@ -62,30 +62,34 @@ TELEPORTERS
 =================================================================================
 */
 
-void TeleportPlayer( gentity_t *player, vec3_t origin, vec3_t angles ) {
+void TeleportPlayer( gentity_t *player, vec3_t origin, vec3_t angles, qboolean exact ) {
 	gentity_t	*tent;
 
 	// use temp events at source and destination to prevent the effect
 	// from getting dropped by a second player event
-	if ( player->client->sess.sessionTeam != TEAM_SPECTATOR ) {
+	if ( player->client->sess.spectatorState == SPECTATOR_NOT ) {
 		tent = G_TempEntity( player->client->ps.origin, EV_PLAYER_TELEPORT_OUT );
-		tent->s.clientNum = player->s.clientNum;
+		tent->s.clientNum = player->s.number;
 
 		tent = G_TempEntity( origin, EV_PLAYER_TELEPORT_IN );
-		tent->s.clientNum = player->s.clientNum;
+		tent->s.clientNum = player->s.number;
+	} else if ( player->client->sess.spectatorState == SPECTATOR_FOLLOW ) {
+		// this is not perfect for players not in TEAM_SPECTATOR but
+		// only Cmd_SetViewpos_f can call it for them
+		SetTeam( player, "s" );
 	}
 
-	// unlink to make sure it can't possibly interfere with G_KillBox
-	trap_UnlinkEntity (player);
-
 	VectorCopy ( origin, player->client->ps.origin );
-	player->client->ps.origin[2] += 1;
 
-	// spit the player out
-	AngleVectors( angles, player->client->ps.velocity, NULL, NULL );
-	VectorScale( player->client->ps.velocity, 400, player->client->ps.velocity );
-	player->client->ps.pm_time = 160;		// hold time
-	player->client->ps.pm_flags |= PMF_TIME_KNOCKBACK;
+	if ( !exact ) {
+		player->client->ps.origin[2] += 1;
+
+		// spit the player out
+		AngleVectors( angles, player->client->ps.velocity, NULL, NULL );
+		VectorScale( player->client->ps.velocity, 400, player->client->ps.velocity );
+		player->client->ps.pm_time = 160;		// hold time
+		player->client->ps.pm_flags |= PMF_TIME_KNOCKBACK;
+	}
 
 	// toggle the teleport bit so the client knows to not lerp
 	player->client->ps.eFlags ^= EF_TELEPORT_BIT;
@@ -94,7 +98,7 @@ void TeleportPlayer( gentity_t *player, vec3_t origin, vec3_t angles ) {
 	SetClientViewAngle( player, angles );
 
 	// kill anything at the destination
-	if ( player->client->sess.sessionTeam != TEAM_SPECTATOR ) {
+	if ( player->client->sess.spectatorState == SPECTATOR_NOT ) {
 		G_KillBox (player);
 	}
 
@@ -103,10 +107,6 @@ void TeleportPlayer( gentity_t *player, vec3_t origin, vec3_t angles ) {
 
 	// use the precise origin for linking
 	VectorCopy( player->client->ps.origin, player->r.currentOrigin );
-
-	if ( player->client->sess.sessionTeam != TEAM_SPECTATOR ) {
-		trap_LinkEntity (player);
-	}
 }
 
 

@@ -314,18 +314,19 @@ typedef struct {
 // on each level change or team change at ClientBegin()
 typedef struct {
 	clientConnected_t	connected;	
-	usercmd_t	cmd;				// we would lose angles if not persistant
-	qboolean	localClient;		// true if "ip" info key is "localhost"
-	qboolean	initialSpawn;		// the first spawn should be at a cool location
-	qboolean	predictItemPickup;	// based on cg_predictItems userinfo
-	qboolean	pmoveFixed;			//
-	char		netname[MAX_NETNAME];
-	int			maxHealth;			// for handicapping
-	int			enterTime;			// level.time the client entered the game
-	playerTeamState_t teamState;	// status in teamplay games
-	int			voteCount;			// to prevent people from constantly calling votes
-	int			teamVoteCount;		// to prevent people from constantly calling votes
-	qboolean	teamInfo;			// send team overlay updates?
+	usercmd_t			cmd;				// we would lose angles if not persistant
+	qboolean			localClient;		// true if "ip" info key is "localhost"
+	qboolean			initialSpawn;		// the first spawn should be at a cool location
+	qboolean			predictItemPickup;	// based on cg_predictItems userinfo
+	qboolean			pmoveFixed;			//
+	char				netname[MAX_NETNAME];
+	int					maxHealth;			// for handicapping
+	int					enterTime;			// level.time the client entered the game
+	playerTeamState_t 	teamState;			// status in teamplay games
+	int					voteCount;			// to prevent people from constantly calling votes
+	int					teamVoteCount;		// to prevent people from constantly calling votes
+	qboolean			teamInfo;			// send team overlay updates?
+	int					spawn[4];			// telemark[3] == yaw
 } clientPersistant_t;
 
 
@@ -501,6 +502,7 @@ typedef struct {
 	int			bodyQueIndex;			// dead bodies
 	gentity_t	*bodyQue[BODY_QUEUE_SIZE];
 	int			portalSequence;
+	qboolean	teamLock[TEAM_NUM_TEAMS];
 } level_locals_t;
 
 
@@ -700,7 +702,7 @@ void trigger_teleporter_touch (gentity_t *self, gentity_t *other, trace_t *trace
 //
 // g_misc.c
 //
-void TeleportPlayer( gentity_t *player, vec3_t origin, vec3_t angles );
+void TeleportPlayer( gentity_t *player, vec3_t origin, vec3_t angles, qboolean exact );
 void ATST_ManageDamageBoxes(gentity_t *ent);
 int G_PlayerBecomeATST(gentity_t *ent);
 
@@ -829,7 +831,7 @@ void UpdateTournamentInfo( void );
 //
 // g_bot.c
 //
-void G_InitBots( qboolean restart );
+void G_InitBots( int restart );
 char *G_GetBotInfoByNumber( int num );
 char *G_GetBotInfoByName( const char *name );
 void G_CheckBotSpawn( void );
@@ -880,9 +882,6 @@ void QDECL G_LogWeaponOutput(void);
 void QDECL G_LogExit( const char *string );
 void QDECL G_ClearClientLog(int client);
 
-// g_saga.c
-void InitSagaMode(void);
-
 // ai_main.c
 #define MAX_FILEPATH			144
 
@@ -893,6 +892,9 @@ int		InFieldOfVision	( vec3_t viewangles, float fov, vec3_t angles);
 // ai_util.c
 void B_InitAlloc(void);
 void B_CleanupAlloc(void);
+
+// ai_wpnav.c
+void defragTrail(vec3_t start, vec3_t end, int time);
 
 //bot settings
 typedef struct bot_settings_s
@@ -906,7 +908,7 @@ int BotAISetup( int restart );
 int BotAIShutdown( int restart );
 int BotAILoadMap( int restart );
 int BotAISetupClient(int client, struct bot_settings_s *settings, qboolean restart);
-int BotAIShutdownClient( int client, qboolean restart );
+int BotAIShutdownClient( int client, int restart );
 int BotAIStartFrame( int time );
 
 #include "g_team.h" // teamplay specific stuff
@@ -937,6 +939,9 @@ extern	vmCvar_t	g_weaponDisable;
 extern	vmCvar_t	g_duelWeaponDisable;
 extern	vmCvar_t	g_fraglimit;
 extern	vmCvar_t	g_duel_fraglimit;
+
+extern	vmCvar_t	g_duelshield;
+
 extern	vmCvar_t	g_timelimit;
 extern	vmCvar_t	g_capturelimit;
 extern	vmCvar_t	g_saberInterpolate;

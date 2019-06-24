@@ -900,35 +900,22 @@ gentity_t *SelectRandomTeamSpawnPoint( int teamstate, team_t team ) {
 	gentity_t	*spots[MAX_TEAM_SPAWN_POINTS];
 	char		*classname;
 
-	if (g_gametype.integer == GT_SAGA)
-	{
-		if (team == SAGATEAM_IMPERIAL)
-		{
-			classname = "info_player_imperial";
-		}
+	if (teamstate == TEAM_BEGIN) {
+		if (team == TEAM_RED)
+			classname = "team_CTF_redplayer";
+		else if (team == TEAM_BLUE)
+			classname = "team_CTF_blueplayer";
 		else
-		{
-			classname = "info_player_rebel";
-		}
+			return NULL;
+	} else {
+		if (team == TEAM_RED)
+			classname = "team_CTF_redspawn";
+		else if (team == TEAM_BLUE)
+			classname = "team_CTF_bluespawn";
+		else
+			return NULL;
 	}
-	else
-	{
-		if (teamstate == TEAM_BEGIN) {
-			if (team == TEAM_RED)
-				classname = "team_CTF_redplayer";
-			else if (team == TEAM_BLUE)
-				classname = "team_CTF_blueplayer";
-			else
-				return NULL;
-		} else {
-			if (team == TEAM_RED)
-				classname = "team_CTF_redspawn";
-			else if (team == TEAM_BLUE)
-				classname = "team_CTF_bluespawn";
-			else
-				return NULL;
-		}
-	}
+
 	count = 0;
 
 	spot = NULL;
@@ -958,28 +945,6 @@ SelectCTFSpawnPoint
 ============
 */
 gentity_t *SelectCTFSpawnPoint ( team_t team, int teamstate, vec3_t origin, vec3_t angles ) {
-	gentity_t	*spot;
-
-	spot = SelectRandomTeamSpawnPoint ( teamstate, team );
-
-	if (!spot) {
-		return SelectSpawnPoint( vec3_origin, origin, angles );
-	}
-
-	VectorCopy (spot->s.origin, origin);
-	origin[2] += 9;
-	VectorCopy (spot->s.angles, angles);
-
-	return spot;
-}
-
-/*
-===========
-SelectSagaSpawnPoint
-
-============
-*/
-gentity_t *SelectSagaSpawnPoint ( team_t team, int teamstate, vec3_t origin, vec3_t angles ) {
 	gentity_t	*spot;
 
 	spot = SelectRandomTeamSpawnPoint ( teamstate, team );

@@ -8,8 +8,6 @@
 void BotDamageNotification(gclient_t *bot, gentity_t *attacker);
 //end rww
 
-void ThrowSaberToAttacker(gentity_t *self, gentity_t *attacker);
-
 void ObjectDie (gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath )
 {
 	if(self->target)
@@ -1360,16 +1358,6 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 			{
 				AddScore( attacker, self->r.currentOrigin, -1 );
 			}
-			if (g_gametype.integer == GT_JEDIMASTER)
-			{
-				if (self->client && self->client->ps.isJediMaster)
-				{ //killed ourself so return the saber to the original position
-				  //(to avoid people jumping off ledges and making the saber
-				  //unreachable for 60 seconds)
-					ThrowSaberToAttacker(self, NULL);
-					self->client->ps.isJediMaster = qfalse;
-				}
-			}
 		} else {
 			if (g_gametype.integer == GT_JEDIMASTER)
 			{
@@ -1377,12 +1365,6 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 					(self->client && self->client->ps.isJediMaster))
 				{
 					AddScore( attacker, self->r.currentOrigin, 1 );
-					
-					if (self->client && self->client->ps.isJediMaster)
-					{
-						ThrowSaberToAttacker(self, attacker);
-						self->client->ps.isJediMaster = qfalse;
-					}
 				}
 				else
 				{
@@ -1428,14 +1410,6 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 
 		}
 	} else {
-		if (self->client && self->client->ps.isJediMaster)
-		{ //killed ourself so return the saber to the original position
-		  //(to avoid people jumping off ledges and making the saber
-		  //unreachable for 60 seconds)
-			ThrowSaberToAttacker(self, NULL);
-			self->client->ps.isJediMaster = qfalse;
-		}
-
 		if (g_gametype.integer == GT_TOURNAMENT)
 		{ //in duel, if you kill yourself, the person you are dueling against gets a kill for it
 			int otherClNum = -1;

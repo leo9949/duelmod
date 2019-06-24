@@ -36,6 +36,9 @@ vmCvar_t	g_weaponDisable;
 vmCvar_t	g_duelWeaponDisable;
 vmCvar_t	g_fraglimit;
 vmCvar_t	g_duel_fraglimit;
+
+vmCvar_t	g_duelshield;
+
 vmCvar_t	g_timelimit;
 vmCvar_t	g_capturelimit;
 vmCvar_t	g_saberInterpolate;
@@ -134,6 +137,9 @@ static cvarTable_t		gameCvarTable[] = {
 
 	{ &g_fraglimit, "fraglimit", "20", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_NORESTART, 0, qtrue },
 	{ &g_duel_fraglimit, "duel_fraglimit", "10", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_NORESTART, 0, qtrue },
+
+	{ &g_duelshield, "g_duelshield", "100", CVAR_ARCHIVE, 0, qtrue },
+
 	{ &g_timelimit, "timelimit", "0", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_NORESTART, 0, qtrue },
 	{ &g_capturelimit, "capturelimit", "8", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_NORESTART, 0, qtrue },
 
@@ -512,10 +518,6 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
 	InitBodyQue();
 
 	ClearRegisteredItems();
-
-	// initialize saga mode before spawning entities so we know
-	// if we should remove any saga-related entities on spawn
-	InitSagaMode();
 
 	// parse the key/value pairs and spawn gentities
 	G_SpawnEntitiesFromString();

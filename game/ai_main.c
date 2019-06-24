@@ -52,10 +52,6 @@ float floattime;
 float regularupdate_time;
 //
 
-//for saga:
-extern int rebel_attackers;
-extern int imperial_attackers;
-
 boteventtracker_t gBotEventTracker[MAX_CLIENTS];
 
 //rww - new bot cvars..
@@ -103,12 +99,6 @@ char *ctfStateDescriptions[] = {
 	"I'm getting our flag back",
 	"I'm escorting our flag carrier",
 	"I've got the enemy's flag"
-};
-
-char *sagaStateDescriptions[] = {
-	"I'm not occupied",
-	"I'm attemtping to complete the current objective",
-	"I'm preventing the enemy from completing their objective"
 };
 
 char *teamplayStateDescriptions[] = {
@@ -162,10 +152,6 @@ void BotReportStatus(bot_state_t *bs)
 	{
 		trap_EA_SayTeam(bs->client, teamplayStateDescriptions[bs->teamplayState]);
 	}
-	else if (g_gametype.integer == GT_SAGA)
-	{
-		trap_EA_SayTeam(bs->client, sagaStateDescriptions[bs->sagaState]);
-	}
 	else if (g_gametype.integer == GT_CTF || g_gametype.integer == GT_CTY)
 	{
 		trap_EA_SayTeam(bs->client, ctfStateDescriptions[bs->ctfState]);
@@ -193,7 +179,7 @@ void BotOrder(gentity_t *ent, int clientnum, int ordernum)
 		return;
 	}
 
-	if (g_gametype.integer != GT_CTF && g_gametype.integer != GT_CTY && g_gametype.integer != GT_SAGA &&
+	if (g_gametype.integer != GT_CTF && g_gametype.integer != GT_CTY &&
 		g_gametype.integer != GT_TEAM)
 	{
 		return;
@@ -203,11 +189,6 @@ void BotOrder(gentity_t *ent, int clientnum, int ordernum)
 	{
 		stateMin = CTFSTATE_NONE;
 		stateMax = CTFSTATE_MAXCTFSTATES;
-	}
-	else if (g_gametype.integer == GT_SAGA)
-	{
-		stateMin = SAGASTATE_NONE;
-		stateMax = SAGASTATE_MAXSAGASTATES;
 	}
 	else if (g_gametype.integer == GT_TEAM)
 	{
@@ -862,7 +843,7 @@ int BotAISetupClient(int client, struct bot_settings_s *settings, qboolean resta
 BotAIShutdownClient
 ==============
 */
-int BotAIShutdownClient(int client, qboolean restart) {
+int BotAIShutdownClient(int client, int restart) {
 	bot_state_t *bs;
 
 	bs = botstates[client];
@@ -1738,25 +1719,6 @@ int PassStandardEnemyChecks(bot_state_t *bs, gentity_t *en)
 		return 0;
 	}
 
-	if (g_gametype.integer == GT_JEDIMASTER && !en->client->ps.isJediMaster && !bs->cur_ps.isJediMaster)
-	{ //rules for attacking non-JM in JM mode
-		vec3_t vs;
-		float vLen = 0;
-
-		if (!g_friendlyFire.integer)
-		{ //can't harm non-JM in JM mode if FF is off
-			return 0;
-		}
-
-		VectorSubtract(bs->origin, en->client->ps.origin, vs);
-		vLen = VectorLength(vs);
-
-		if (vLen > 350)
-		{
-			return 0;
-		}
-	}
-
 	/*
 	if (en->client && en->client->pers.connected != CON_CONNECTED)
 	{
@@ -2044,27 +2006,6 @@ int ScanForEnemies(bot_state_t *bs)
 		hasEnemyDist = bs->frame_Enemy_Len;
 	}
 
-	if (bs->currentEnemy && bs->currentEnemy->client &&
-		bs->currentEnemy->client->ps.isJediMaster)
-	{ //The Jedi Master must die.
-		return -1;
-	}
-
-	if (g_gametype.integer == GT_JEDIMASTER)
-	{
-		if (G_ThereIsAMaster() && !bs->cur_ps.isJediMaster)
-		{
-			if (!g_friendlyFire.integer)
-			{
-				noAttackNonJM = qtrue;
-			}
-			else
-			{
-				closest = 128; //only get mad at people if they get close enough to you to anger you, or hurt you
-			}
-		}
-	}
-
 	while (i <= MAX_CLIENTS)
 	{
 		if (i != bs->client && g_entities[i].client && !OnSameTeam(&g_entities[bs->client], &g_entities[i]) && PassStandardEnemyChecks(bs, &g_entities[i]) && trap_InPVS(g_entities[i].client->ps.origin, bs->eye) && PassLovedOneCheck(bs, &g_entities[i]))
@@ -2072,11 +2013,6 @@ int ScanForEnemies(bot_state_t *bs)
 			VectorSubtract(g_entities[i].client->ps.origin, bs->eye, a);
 			distcheck = VectorLength(a);
 			vectoangles(a, a);
-
-			if (g_entities[i].client->ps.isJediMaster)
-			{ //make us think the Jedi Master is close so we'll attack him above all
-				distcheck = 1;
-			}
 
 			if (distcheck < closest && ((InFieldOfVision(bs->viewangles, 90, a) && !BotMindTricked(bs->client, i)) || BotCanHear(bs, &g_entities[i], distcheck)) && OrgVisible(bs->eye, g_entities[i].client->ps.origin, -1))
 			{
@@ -2197,28 +2133,11 @@ int BotIsAChickenWuss(bot_state_t *bs)
 		return 0;
 	}
 
-	if (g_gametype.integer == GT_JEDIMASTER && !bs->cur_ps.isJediMaster)
-	{ //Then you may know no fear.
-		//Well, unless he's strong.
-		if (bs->currentEnemy && bs->currentEnemy->client &&
-			bs->currentEnemy->client->ps.isJediMaster &&
-			bs->currentEnemy->health > 40 &&
-			bs->cur_ps.weapon < WP_ROCKET_LAUNCHER)
-		{ //explosive weapons are most effective against the Jedi Master
-			goto jmPass;
-		}
-		return 0;
-	}
-jmPass:
 	if (bs->chickenWussCalculationTime > level.time)
 	{
 		return 2; //don't want to keep going between two points...
 	}
 
-	if (g_gametype.integer == GT_JEDIMASTER && !bs->cur_ps.isJediMaster)
-	{
-		return 1;
-	}
 
 	bs->chickenWussCalculationTime = level.time + MAX_CHICKENWUSS_TIME;
 
@@ -2907,443 +2826,6 @@ int EntityVisibleBox(vec3_t org1, vec3_t mins, vec3_t maxs, vec3_t org2, int ign
 	return 0;
 }
 
-int Saga_TargetClosestObjective(bot_state_t *bs, int flag)
-{
-	int i = 0;
-	int bestindex = -1;
-	float testdistance = 0;
-	float bestdistance = 999999999;
-	gentity_t *goalent;
-	vec3_t a, dif;
-	vec3_t mins, maxs;
-
-	mins[0] = -1;
-	mins[1] = -1;
-	mins[2] = -1;
-
-	maxs[0] = 1;
-	maxs[1] = 1;
-	maxs[2] = 1;
-
-	if ( bs->wpDestination && (bs->wpDestination->flags & flag) && bs->wpDestination->associated_entity != ENTITYNUM_NONE &&
-		 &g_entities[bs->wpDestination->associated_entity] && g_entities[bs->wpDestination->associated_entity].use )
-	{
-		goto hasPoint;
-	}
-
-	while (i < gWPNum)
-	{
-		if ( gWPArray[i] && gWPArray[i]->inuse && (gWPArray[i]->flags & flag) && gWPArray[i]->associated_entity != ENTITYNUM_NONE &&
-			 &g_entities[gWPArray[i]->associated_entity] && g_entities[gWPArray[i]->associated_entity].use )
-		{
-			VectorSubtract(gWPArray[i]->origin, bs->origin, a);
-			testdistance = VectorLength(a);
-
-			if (testdistance < bestdistance)
-			{
-				bestdistance = testdistance;
-				bestindex = i;
-			}
-		}
-
-		i++;
-	}
-
-	if (bestindex != -1)
-	{
-		bs->wpDestination = gWPArray[bestindex];
-	}
-	else
-	{
-		return 0;
-	}
-hasPoint:
-	goalent = &g_entities[bs->wpDestination->associated_entity];
-
-	if (!goalent)
-	{
-		return 0;
-	}
-
-	VectorSubtract(bs->origin, bs->wpDestination->origin, a);
-
-	testdistance = VectorLength(a);
-
-	dif[0] = (goalent->r.absmax[0]+goalent->r.absmin[0])/2;
-	dif[1] = (goalent->r.absmax[1]+goalent->r.absmin[1])/2;
-	dif[2] = (goalent->r.absmax[2]+goalent->r.absmin[2])/2;
-	//brush models can have tricky origins, so this is our hacky method of getting the center point
-
-	if (goalent->takedamage && testdistance < BOT_MIN_SAGA_GOAL_SHOOT &&
-		EntityVisibleBox(bs->origin, mins, maxs, dif, bs->client, goalent->s.number))
-	{
-		bs->shootGoal = goalent;
-		bs->touchGoal = NULL;
-	}
-	else if (goalent->use && testdistance < BOT_MIN_SAGA_GOAL_TRAVEL)
-	{
-		bs->shootGoal = NULL;
-		bs->touchGoal = goalent;
-	}
-	else
-	{ //don't know how to handle this goal object!
-		bs->shootGoal = NULL;
-		bs->touchGoal = NULL;
-	}
-
-	if (BotGetWeaponRange(bs) == BWEAPONRANGE_MELEE ||
-		BotGetWeaponRange(bs) == BWEAPONRANGE_SABER)
-	{
-		bs->shootGoal = NULL; //too risky
-	}
-
-	if (bs->touchGoal)
-	{
-		//G_Printf("Please, master, let me touch it!\n");
-		VectorCopy(dif, bs->goalPosition);
-	}
-
-	return 1;
-}
-
-void Saga_DefendFromAttackers(bot_state_t *bs)
-{ //this may be a little cheap, but the best way to find our defending point is probably
-  //to just find the nearest person on the opposing team since they'll most likely
-  //be on offense in this situation
-	int wpClose = -1;
-	int i = 0;
-	float testdist = 999999;
-	int bestindex = -1;
-	float bestdist = 999999;
-	gentity_t *ent;
-	vec3_t a;
-
-	while (i < MAX_CLIENTS)
-	{
-		ent = &g_entities[i];
-
-		if (ent && ent->client && ent->client->sess.sessionTeam != g_entities[bs->client].client->sess.sessionTeam &&
-			ent->health > 0 && ent->client->sess.sessionTeam != TEAM_SPECTATOR)
-		{
-			VectorSubtract(ent->client->ps.origin, bs->origin, a);
-
-			testdist = VectorLength(a);
-
-			if (testdist < bestdist)
-			{
-				bestindex = i;
-				bestdist = testdist;
-			}
-		}
-
-		i++;
-	}
-
-	if (bestindex == -1)
-	{
-		return;
-	}
-
-	wpClose = GetNearestVisibleWP(g_entities[bestindex].client->ps.origin, -1);	
-
-	if (wpClose != -1 && gWPArray[wpClose] && gWPArray[wpClose]->inuse)
-	{
-		bs->wpDestination = gWPArray[wpClose];
-		bs->destinationGrabTime = level.time + 10000;
-	}
-}
-
-int Saga_CountDefenders(bot_state_t *bs)
-{
-	int i = 0;
-	int num = 0;
-	gentity_t *ent;
-	bot_state_t *bot;
-
-	while (i < MAX_CLIENTS)
-	{
-		ent = &g_entities[i];
-		bot = botstates[i];
-
-		if (ent && ent->client && bot)
-		{
-			if (bot->sagaState == SAGASTATE_DEFENDER &&
-				ent->client->sess.sessionTeam == g_entities[bs->client].client->sess.sessionTeam)
-			{
-				num++;
-			}
-		}
-
-		i++;
-	}
-
-	return num;
-}
-
-int Saga_CountTeammates(bot_state_t *bs)
-{
-	int i = 0;
-	int num = 0;
-	gentity_t *ent;
-
-	while (i < MAX_CLIENTS)
-	{
-		ent = &g_entities[i];
-
-		if (ent && ent->client)
-		{
-			if (ent->client->sess.sessionTeam == g_entities[bs->client].client->sess.sessionTeam)
-			{
-				num++;
-			}
-		}
-
-		i++;
-	}
-
-	return num;
-}
-
-int SagaTakesPriority(bot_state_t *bs)
-{
-	int attacker;
-	int flagForDefendableObjective;
-	int flagForAttackableObjective;
-	int defenders, teammates;
-	int idleWP;
-	wpobject_t *dest_sw = NULL;
-	int dosw = 0;
-	gclient_t *bcl;
-	vec3_t dif;
-	trace_t tr;
-
-	if (g_gametype.integer != GT_SAGA)
-	{
-		return 0;
-	}
-
-	bcl = g_entities[bs->client].client;
-
-	if (!bcl)
-	{
-		return 0;
-	}
-
-	if (bs->cur_ps.weapon == WP_BRYAR_PISTOL &&
-		(level.time - bs->lastDeadTime) < BOT_MAX_WEAPON_GATHER_TIME)
-	{ //get the nearest weapon laying around base before heading off for battle
-		idleWP = GetBestIdleGoal(bs);
-
-		if (idleWP != -1 && gWPArray[idleWP] && gWPArray[idleWP]->inuse)
-		{
-			if (bs->wpDestSwitchTime < level.time)
-			{
-				bs->wpDestination = gWPArray[idleWP];
-			}
-			return 1;
-		}
-	}
-	else if (bs->cur_ps.weapon == WP_BRYAR_PISTOL &&
-		(level.time - bs->lastDeadTime) < BOT_MAX_WEAPON_CHASE_TIME &&
-		bs->wpDestination && bs->wpDestination->weight)
-	{
-		dest_sw = bs->wpDestination;
-		dosw = 1;
-	}
-
-	if (bcl->sess.sessionTeam == SAGATEAM_IMPERIAL)
-	{
-		attacker = imperial_attackers;
-		flagForDefendableObjective = WPFLAG_SAGA_REBELOBJ;
-		flagForAttackableObjective = WPFLAG_SAGA_IMPERIALOBJ;
-	}
-	else
-	{
-		attacker = rebel_attackers;
-		flagForDefendableObjective = WPFLAG_SAGA_IMPERIALOBJ;
-		flagForAttackableObjective = WPFLAG_SAGA_REBELOBJ;
-	}
-
-	if (attacker)
-	{
-		bs->sagaState = SAGASTATE_ATTACKER;
-	}
-	else
-	{
-		bs->sagaState = SAGASTATE_DEFENDER;
-		defenders = Saga_CountDefenders(bs);
-		teammates = Saga_CountTeammates(bs);
-
-		if (defenders > teammates/3 && teammates > 1)
-		{ //devote around 1/4 of our team to completing our own side goals even if we're a defender.
-		  //If we have no side goals we will realize that later on and join the defenders
-			bs->sagaState = SAGASTATE_ATTACKER;
-		}
-	}
-
-	if (bs->state_Forced)
-	{
-		bs->sagaState = bs->state_Forced;
-	}
-
-	if (bs->sagaState == SAGASTATE_ATTACKER)
-	{
-		if (!Saga_TargetClosestObjective(bs, flagForAttackableObjective))
-		{ //looks like we have no goals other than to keep the other team from completing objectives
-			Saga_DefendFromAttackers(bs);
-			if (bs->shootGoal)
-			{
-				dif[0] = (bs->shootGoal->r.absmax[0]+bs->shootGoal->r.absmin[0])/2;
-				dif[1] = (bs->shootGoal->r.absmax[1]+bs->shootGoal->r.absmin[1])/2;
-				dif[2] = (bs->shootGoal->r.absmax[2]+bs->shootGoal->r.absmin[2])/2;
-				
-				if (!trap_InPVS(bs->origin, dif))
-				{
-					bs->shootGoal = NULL;
-				}
-				else
-				{
-					trap_Trace(&tr, bs->origin, NULL, NULL, dif, bs->client, MASK_SOLID);
-
-					if (tr.fraction != 1 && tr.entityNum != bs->shootGoal->s.number)
-					{
-						bs->shootGoal = NULL;
-					}
-				}
-			}
-		}
-	}
-	else if (bs->sagaState == SAGASTATE_DEFENDER)
-	{
-		Saga_DefendFromAttackers(bs);
-		if (bs->shootGoal)
-		{
-			dif[0] = (bs->shootGoal->r.absmax[0]+bs->shootGoal->r.absmin[0])/2;
-			dif[1] = (bs->shootGoal->r.absmax[1]+bs->shootGoal->r.absmin[1])/2;
-			dif[2] = (bs->shootGoal->r.absmax[2]+bs->shootGoal->r.absmin[2])/2;
-				
-			if (!trap_InPVS(bs->origin, dif))
-			{
-				bs->shootGoal = NULL;
-			}
-			else
-			{
-				trap_Trace(&tr, bs->origin, NULL, NULL, dif, bs->client, MASK_SOLID);
-
-				if (tr.fraction != 1 && tr.entityNum != bs->shootGoal->s.number)
-				{
-					bs->shootGoal = NULL;
-				}
-			}
-		}
-	}
-	else
-	{ //get busy!
-		Saga_TargetClosestObjective(bs, flagForAttackableObjective);
-		if (bs->shootGoal)
-		{
-			dif[0] = (bs->shootGoal->r.absmax[0]+bs->shootGoal->r.absmin[0])/2;
-			dif[1] = (bs->shootGoal->r.absmax[1]+bs->shootGoal->r.absmin[1])/2;
-			dif[2] = (bs->shootGoal->r.absmax[2]+bs->shootGoal->r.absmin[2])/2;
-				
-			if (!trap_InPVS(bs->origin, dif))
-			{
-				bs->shootGoal = NULL;
-			}
-			else
-			{
-				trap_Trace(&tr, bs->origin, NULL, NULL, dif, bs->client, MASK_SOLID);
-
-				if (tr.fraction != 1 && tr.entityNum != bs->shootGoal->s.number)
-				{
-					bs->shootGoal = NULL;
-				}
-			}
-		}
-	}
-
-	if (dosw)
-	{ //allow saga objective code to run, but if after a particular item then keep going after it
-		bs->wpDestination = dest_sw;
-	}
-
-	return 1;
-}
-
-int JMTakesPriority(bot_state_t *bs)
-{
-	int i = 0;
-	int wpClose = -1;
-	gentity_t *theImportantEntity = NULL;
-
-	if (g_gametype.integer != GT_JEDIMASTER)
-	{
-		return 0;
-	}
-
-	if (bs->cur_ps.isJediMaster)
-	{
-		return 0;
-	}
-
-	//jmState becomes the index for the one who carries the saber. If jmState is -1 then the saber is currently
-	//without an owner
-	bs->jmState = -1;
-
-	while (i < MAX_CLIENTS)
-	{
-		if (g_entities[i].client && g_entities[i].inuse &&
-			g_entities[i].client->ps.isJediMaster)
-		{
-			bs->jmState = i;
-			break;
-		}
-
-		i++;
-	}
-
-	if (bs->jmState != -1)
-	{
-		theImportantEntity = &g_entities[bs->jmState];
-	}
-	else
-	{
-		theImportantEntity = gJMSaberEnt;
-	}
-
-	if (theImportantEntity && theImportantEntity->inuse && bs->destinationGrabTime < level.time)
-	{
-		if (theImportantEntity->client)
-		{
-			wpClose = GetNearestVisibleWP(theImportantEntity->client->ps.origin, theImportantEntity->s.number);	
-		}
-		else
-		{
-			wpClose = GetNearestVisibleWP(theImportantEntity->r.currentOrigin, theImportantEntity->s.number);	
-		}
-
-		if (wpClose != -1 && gWPArray[wpClose] && gWPArray[wpClose]->inuse)
-		{
-			/*
-			Com_Printf("BOT GRABBED IDEAL JM LOCATION\n");
-			if (bs->wpDestination != gWPArray[wpClose])
-			{
-				Com_Printf("IDEAL WAS NOT ALREADY IDEAL\n");
-
-				if (!bs->wpDestination)
-				{
-					Com_Printf("IDEAL WAS NULL\n");
-				}
-			}
-			*/
-			bs->wpDestination = gWPArray[wpClose];
-			bs->destinationGrabTime = level.time + 4000;
-		}
-	}
-
-	return 1;
-}
-
 int BotHasAssociated(bot_state_t *bs, wpobject_t *wp)
 {
 	gentity_t *as;
@@ -3542,18 +3024,6 @@ void GetIdealDestination(bot_state_t *bs)
 			bs->runningToEscapeThreat = 1;
 		}
 		return;
-	}
-	else if (!badthing && SagaTakesPriority(bs))
-	{
-		if (bs->sagaState)
-		{
-			bs->runningToEscapeThreat = 1;
-		}
-		return;
-	}
-	else if (!badthing && JMTakesPriority(bs))
-	{
-		bs->runningToEscapeThreat = 1;
 	}
 
 	if (badthing)
@@ -3905,71 +3375,6 @@ void CommanderBotCTFAI(bot_state_t *bs)
 	}
 }
 
-void CommanderBotSagaAI(bot_state_t *bs)
-{
-	int i = 0;
-	int squadmates = 0;
-	int commanded = 0;
-	int teammates = 0;
-	gentity_t *squad[MAX_CLIENTS];
-	gentity_t *ent;
-	bot_state_t *bst;
-
-	while (i < MAX_CLIENTS)
-	{
-		ent = &g_entities[i];
-
-		if (ent && ent->client && OnSameTeam(&g_entities[bs->client], ent) && botstates[ent->s.number])
-		{
-			bst = botstates[ent->s.number];
-
-			if (bst && !bst->isSquadLeader && !bst->state_Forced)
-			{
-				squad[squadmates] = ent;
-				squadmates++;
-			}
-			else if (bst && !bst->isSquadLeader && bst->state_Forced)
-			{ //count them as commanded
-				commanded++;
-			}
-		}
-
-		if (ent && ent->client && OnSameTeam(&g_entities[bs->client], ent))
-		{
-			teammates++;
-		}
-
-		i++;
-	}
-	
-	if (!squadmates)
-	{
-		return;
-	}
-
-	//tell squad mates to do what I'm doing, up to half of team, let the other half make their own decisions
-	i = 0;
-
-	while (i < squadmates && squad[i])
-	{
-		bst = botstates[squad[i]->s.number];
-
-		if (commanded > teammates/2)
-		{
-			break;
-		}
-
-		if (bst)
-		{
-			bst->state_Forced = bs->sagaState;
-			bst->sagaState = bs->sagaState;
-			commanded++;
-		}
-
-		i++;
-	}
-}
-
 void BotDoTeamplayAI(bot_state_t *bs)
 {
 	if (bs->state_Forced)
@@ -4082,10 +3487,6 @@ void CommanderBotAI(bot_state_t *bs)
 	if (g_gametype.integer == GT_CTF || g_gametype.integer == GT_CTY)
 	{
 		CommanderBotCTFAI(bs);
-	}
-	else if (g_gametype.integer == GT_SAGA)
-	{
-		CommanderBotSagaAI(bs);
 	}
 	else if (g_gametype.integer == GT_TEAM)
 	{
@@ -6635,23 +6036,6 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 	else if (bs->plantContinue < level.time)
 	{
 		bs->forceWeaponSelect = 0;
-	}
-
-	if (g_gametype.integer == GT_JEDIMASTER && !bs->cur_ps.isJediMaster && bs->jmState == -1 && gJMSaberEnt && gJMSaberEnt->inuse)
-	{
-		vec3_t saberLen;
-		float fSaberLen = 0;
-
-		VectorSubtract(bs->origin, gJMSaberEnt->r.currentOrigin, saberLen);
-		fSaberLen = VectorLength(saberLen);
-
-		if (fSaberLen < 256)
-		{
-			if (OrgVisible(bs->origin, gJMSaberEnt->r.currentOrigin, bs->client))
-			{
-				VectorCopy(gJMSaberEnt->r.currentOrigin, bs->goalPosition);
-			}
-		}
 	}
 
 	if (bs->beStill < level.time && !WaitingForNow(bs, bs->goalPosition) && !fjHalt)

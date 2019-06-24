@@ -2,7 +2,7 @@
 //
 #include "g_local.h"
 
-#include "../../ui/menudef.h"			// for the voice chats
+#include "../ui/menudef.h"			// for the voice chats
 
 //rww - for getting bot commands...
 int AcceptBotCommand(char *cmd, gentity_t *pl);
@@ -213,6 +213,22 @@ int ClientNumberFromString( gentity_t *to, char *s ) {
 
 	trap_SendServerCommand( to-g_entities, va("print \"User %s is not on the server\n\"", s));
 	return -1;
+}
+
+static void Cmd_Testcommand_f( gentity_t *ent ) {
+	defragTrail(g_entities[1].r.currentOrigin, ent->r.currentOrigin, 2520);
+}
+
+static void Cmd_SetSpawnpoint_f( gentity_t *ent ) {
+	ent->client->ps.duelIndex = 99;
+	ent->client->ps.viewangles[0] = 0.0f;
+	ent->client->ps.viewangles[2] = 0.0f;
+	ent->client->pers.spawn[0] = (int) ent->client->ps.origin[0];
+	ent->client->pers.spawn[1] = (int) ent->client->ps.origin[1];
+	ent->client->pers.spawn[2] = (int) ent->client->ps.origin[2];
+	ent->client->pers.spawn[3] = ent->client->ps.viewangles[1];
+//	ent->client->info.userflags |= UF_TELEMARK_SET;
+	trap_SendServerCommand( ent->client->ps.clientNum, va("print \"Spawnpoint set at: ^1X:^7%d, ^1Y:^7%d, ^1Z:^7%d, ^1YAW:^7%d\n\"", (int) ent->client->ps.origin[0], (int) ent->client->ps.origin[1], (int) ent->client->ps.origin[2], ent->client->pers.spawn[3]));
 }
 
 /*
@@ -595,6 +611,11 @@ void SetTeam( gentity_t *ent, char *s ) {
 	int					specClient;
 	int					teamLeader;
 
+	// fix: this prevents rare creation of invalid players
+	if (!ent->inuse)
+	{
+		return;
+	}
 	//
 	// see what change is requested
 	//
@@ -605,7 +626,8 @@ void SetTeam( gentity_t *ent, char *s ) {
 	specState = SPECTATOR_NOT;
 	if ( !Q_stricmp( s, "scoreboard" ) || !Q_stricmp( s, "score" )  ) {
 		team = TEAM_SPECTATOR;
-		specState = SPECTATOR_SCOREBOARD;
+//		specState = SPECTATOR_SCOREBOARD;
+		specState = SPECTATOR_FREE;
 	} else if ( !Q_stricmp( s, "follow1" ) ) {
 		team = TEAM_SPECTATOR;
 		specState = SPECTATOR_FOLLOW;
@@ -614,101 +636,48 @@ void SetTeam( gentity_t *ent, char *s ) {
 		team = TEAM_SPECTATOR;
 		specState = SPECTATOR_FOLLOW;
 		specClient = -2;
-	} else if ( !Q_stricmp( s, "spectator" ) || !Q_stricmp( s, "s" ) ) {
-		team = TEAM_SPECTATOR;
-		specState = SPECTATOR_FREE;
+	} else if ( !Q_stricmp( s, "spectator" ) || !Q_stricmp( s, "s" )  || !Q_stricmp( s, "spectate" ) ) {
+		if ( level.teamLock[TEAM_SPECTATOR] ) {
+			trap_SendServerCommand( ent->client->ps.clientNum, va("print \"^3Spectator ^7access has been locked!\n\""));
+			trap_SendServerCommand( ent->client->ps.clientNum, va("cp \"^7Sorry, ^3spectator ^7access is locked.\""));
+			return;
+		} else {
+			ent->client->ps.saberHolstered = qtrue;
+			team = TEAM_SPECTATOR;
+			specState = SPECTATOR_FREE;
+		}
 	} else if ( g_gametype.integer >= GT_TEAM ) {
 		// if running a team game, assign player to one of the teams
 		specState = SPECTATOR_NOT;
 		if ( !Q_stricmp( s, "red" ) || !Q_stricmp( s, "r" ) ) {
+			if ( level.teamLock[TEAM_RED] ) {
+				trap_SendServerCommand( ent->client->ps.clientNum, va("print \"^1Red ^7team is locked!\n\""));
+				trap_SendServerCommand( ent->client->ps.clientNum, va("cp \"^7Sorry, ^1Red ^7Team has been locked.\""));
+				return;
+			} else {
 			team = TEAM_RED;
+			}
 		} else if ( !Q_stricmp( s, "blue" ) || !Q_stricmp( s, "b" ) ) {
-			team = TEAM_BLUE;
+			if ( level.teamLock[TEAM_BLUE] ) {
+				trap_SendServerCommand( ent->client->ps.clientNum, va("print \"^4Blue ^7team is locked!\n\""));
+				trap_SendServerCommand( ent->client->ps.clientNum, va("cp \"^7Sorry, ^4Blue ^7Team has been locked.\""));
+				return;
 		} else {
-			// pick the team with the least number of players
-			//For now, don't do this. The legalize function will set powers properly now.
-			/*
-			if (g_forceBasedTeams.integer)
-			{
-				if (ent->client->ps.fd.forceSide == FORCE_LIGHTSIDE)
-				{
-					team = TEAM_BLUE;
-				}
-				else
-				{
-					team = TEAM_RED;
-				}
+				team = TEAM_BLUE;
 			}
-			else
-			{
-			*/
+		} else {
 				team = PickTeam( clientNum );
-			//}
 		}
-
-		if ( g_teamForceBalance.integer  ) {
-			int		counts[TEAM_NUM_TEAMS];
-
-			counts[TEAM_BLUE] = TeamCount( ent->client->ps.clientNum, TEAM_BLUE );
-			counts[TEAM_RED] = TeamCount( ent->client->ps.clientNum, TEAM_RED );
-
-			// We allow a spread of two
-			if ( team == TEAM_RED && counts[TEAM_RED] - counts[TEAM_BLUE] > 1 ) {
-				//For now, don't do this. The legalize function will set powers properly now.
-				/*
-				if (g_forceBasedTeams.integer && ent->client->ps.fd.forceSide == FORCE_DARKSIDE)
-				{
-					trap_SendServerCommand( ent->client->ps.clientNum, 
-						va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "TOOMANYRED_SWITCH")) );
-				}
-				else
-				*/
-				{
-					trap_SendServerCommand( ent->client->ps.clientNum, 
-						va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "TOOMANYRED")) );
-				}
-				return; // ignore the request
-			}
-			if ( team == TEAM_BLUE && counts[TEAM_BLUE] - counts[TEAM_RED] > 1 ) {
-				//For now, don't do this. The legalize function will set powers properly now.
-				/*
-				if (g_forceBasedTeams.integer && ent->client->ps.fd.forceSide == FORCE_LIGHTSIDE)
-				{
-					trap_SendServerCommand( ent->client->ps.clientNum, 
-						va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "TOOMANYBLUE_SWITCH")) );
-				}
-				else
-				*/
-				{
-					trap_SendServerCommand( ent->client->ps.clientNum, 
-						va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "TOOMANYBLUE")) );
-				}
-				return; // ignore the request
-			}
-
-			// It's ok, the team we are switching to has less or same number of players
-		}
-
-		//For now, don't do this. The legalize function will set powers properly now.
-		/*
-		if (g_forceBasedTeams.integer)
-		{
-			if (team == TEAM_BLUE && ent->client->ps.fd.forceSide != FORCE_LIGHTSIDE)
-			{
-				trap_SendServerCommand( ent-g_entities, va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "MUSTBELIGHT")) );
-				return;
-			}
-			if (team == TEAM_RED && ent->client->ps.fd.forceSide != FORCE_DARKSIDE)
-			{
-				trap_SendServerCommand( ent-g_entities, va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "MUSTBEDARK")) );
-				return;
-			}
-		}
-		*/
 
 	} else {
 		// force them to spectators if there aren't any spots free
-		team = TEAM_FREE;
+		if ( level.teamLock[TEAM_FREE] ) {
+				trap_SendServerCommand( ent->client->ps.clientNum, va("print \"^2join ^7team is locked!\n\""));
+				trap_SendServerCommand( ent->client->ps.clientNum, va("cp \"^7Sorry, ^2join ^7team has been locked.\""));
+				return;
+			} else {
+				team = TEAM_FREE;
+			}
 	}
 
 	// override decision if limiting the players
@@ -733,22 +702,26 @@ void SetTeam( gentity_t *ent, char *s ) {
 	//
 
 	// if the player was dead leave the body
-	if ( client->ps.stats[STAT_HEALTH] <= 0 ) {
+	if ( client->ps.stats[STAT_HEALTH] <= 0 && client->sess.sessionTeam != TEAM_SPECTATOR ) {
 		CopyToBodyQue(ent);
 	}
 
 	// he starts at 'base'
 	client->pers.teamState.state = TEAM_BEGIN;
+	
 	if ( oldTeam != TEAM_SPECTATOR ) {
-		// Kill him (makes sure he loses flags, etc)
+			// Kill him (makes sure he loses flags, etc)
 		ent->flags &= ~FL_GODMODE;
 		ent->client->ps.stats[STAT_HEALTH] = ent->health = 0;
 		player_die (ent, ent, ent, 100000, MOD_SUICIDE);
 
 	}
+
 	// they go to the end of the line for tournements
 	if ( team == TEAM_SPECTATOR ) {
-		client->sess.spectatorTime = level.time;
+		if ( (g_gametype.integer != GT_TOURNAMENT) || (oldTeam != TEAM_SPECTATOR) )	{//so you don't get dropped to the bottom of the queue for changing skins, etc.
+			client->sess.spectatorTime = level.time;
+		}
 	}
 
 	client->sess.sessionTeam = team;
@@ -760,7 +733,7 @@ void SetTeam( gentity_t *ent, char *s ) {
 		teamLeader = TeamLeader( team );
 		// if there is no team leader or the team leader is a bot and this client is not a bot
 		if ( teamLeader == -1 || ( !(g_entities[clientNum].r.svFlags & SVF_BOT) && (g_entities[teamLeader].r.svFlags & SVF_BOT) ) ) {
-			SetLeader( team, clientNum );
+			//SetLeader( team, clientNum );
 		}
 	}
 	// make sure there is a team leader on the team the player came from
@@ -879,6 +852,12 @@ argCheck:
 	}
 }
 
+const char * const teamColorString[TEAM_NUM_TEAMS] = {
+	S_COLOR_WHITE,
+	S_COLOR_RED,
+	S_COLOR_BLUE,
+	S_COLOR_YELLOW
+};
 /*
 =================
 Cmd_Follow_f
@@ -892,6 +871,12 @@ void Cmd_Follow_f( gentity_t *ent ) {
 		if ( ent->client->sess.spectatorState == SPECTATOR_FOLLOW ) {
 			StopFollowing( ent );
 		}
+		return;
+	}
+
+	if ( ent->client->sess.sessionTeam != TEAM_SPECTATOR && level.teamLock[TEAM_SPECTATOR] ) {
+		trap_SendServerCommand( ent-g_entities, va("print \"%s" S_COLOR_WHITE " team is locked.\n\"",
+				teamColorString[TEAM_SPECTATOR]/*, BG_TeamName(TEAM_SPECTATOR, CASE_NORMAL)*/) );
 		return;
 	}
 
@@ -1725,40 +1710,6 @@ void Cmd_TeamVote_f( gentity_t *ent ) {
 	// for players entering or leaving
 }
 
-
-/*
-=================
-Cmd_SetViewpos_f
-=================
-*/
-void Cmd_SetViewpos_f( gentity_t *ent ) {
-	vec3_t		origin, angles;
-	char		buffer[MAX_TOKEN_CHARS];
-	int			i;
-
-	if ( !g_cheats.integer ) {
-		trap_SendServerCommand( ent-g_entities, va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "NOCHEATS")));
-		return;
-	}
-	if ( trap_Argc() != 5 ) {
-		trap_SendServerCommand( ent-g_entities, va("print \"usage: setviewpos x y z yaw\n\""));
-		return;
-	}
-
-	VectorClear( angles );
-	for ( i = 0 ; i < 3 ; i++ ) {
-		trap_Argv( i + 1, buffer, sizeof( buffer ) );
-		origin[i] = atof( buffer );
-	}
-
-	trap_Argv( 4, buffer, sizeof( buffer ) );
-	angles[YAW] = atof( buffer );
-
-	TeleportPlayer( ent, origin, angles );
-}
-
-
-
 /*
 =================
 Cmd_Stats_f
@@ -2355,10 +2306,12 @@ void ClientCommand( int clientNum ) {
 		Cmd_TeamVote_f (ent);
 	else if (Q_stricmp (cmd, "gc") == 0)
 		Cmd_GameCommand_f( ent );
-	else if (Q_stricmp (cmd, "setviewpos") == 0)
-		Cmd_SetViewpos_f( ent );
 	else if (Q_stricmp (cmd, "stats") == 0)
 		Cmd_Stats_f( ent );
+	else if (Q_stricmp (cmd, "setspawn") == 0)
+		Cmd_SetSpawnpoint_f( ent );
+	else if (Q_stricmp (cmd, "digl") == 0)
+		Cmd_Testcommand_f( ent );
 	else if (Q_stricmp(cmd, "#mm") == 0 && CheatsOk( ent ))
 	{
 		G_PlayerBecomeATST(ent);
